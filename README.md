@@ -1,2 +1,8 @@
-# physfs
-Fork pf PhysFS: http://icculus.org/physfs/
+# PhysicsFS
+
+Fork of PhysicsFS; a portable, flexible file i/o abstraction.
+
+  upstream version: http://icculus.org/physfs/
+
+Please see the docs directory for documentation, licensing, and information.
+
