@@ -438,7 +438,7 @@ static int iso_find_dir_entry(ISO9660Handle *handle,const char *path,
             iso_extractfilename(handle, descriptor, filename, &version),
             ERRPASS, -1);
 
-        if (strcmp(filename, mypath) == 0)
+        if (__PHYSFS_utf8stricmp(filename, mypath) == 0)
         {
             if ( (subpath == 0) || (subpath[0] == 0) )
                 return 0;  /* no subpaths left and we found the entry */
@@ -861,7 +861,7 @@ static void ISO9660_enumerateFiles(void *opaque, const char *dname,
 
         strncpy(filename,descriptor.filename,descriptor.filenamelen);
         iso_extractfilename(handle, &descriptor, filename, &version);
-        cb(callbackdata, origdir,filename);
+        cb(callbackdata, origdir,filename, NULL);
     } /* while */
 } /* ISO9660_enumerateFiles */
 
@@ -941,7 +941,7 @@ const PHYSFS_Archiver __PHYSFS_Archiver_ISO9660 =
         "ISO",
         "ISO9660 image file",
         "Christoph Nelles <evilazrael@evilazrael.de>",
-        "http://www.evilazrael.de/",
+        "https://www.evilazrael.de/",
         0,  /* supportsSymlinks */
     },
     ISO9660_openArchive,

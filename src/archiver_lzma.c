@@ -124,7 +124,7 @@ SZ_RESULT SzFileReadImp(void *object, void **buffer, size_t maxReqSize,
 SZ_RESULT SzFileReadImp(void *object, void *buffer, size_t size,
                         size_t *processedSize)
 {
-    FileInputStream *s = (FileInputStream *)((unsigned long)object - offsetof(FileInputStream, inStream)); /* HACK! */
+    FileInputStream *s = (FileInputStream *)((size_t)object - offsetof(FileInputStream, inStream)); /* HACK! */
     const size_t processedSizeLoc = s->io->read(s->io, buffer, size);
     if (processedSize != NULL)
         *processedSize = processedSizeLoc;
@@ -139,7 +139,7 @@ SZ_RESULT SzFileReadImp(void *object, void *buffer, size_t size,
  */
 SZ_RESULT SzFileSeekImp(void *object, CFileSize pos)
 {
-    FileInputStream *s = (FileInputStream *)((unsigned long)object - offsetof(FileInputStream, inStream)); /* HACK! */
+    FileInputStream *s = (FileInputStream *)((size_t)object - offsetof(FileInputStream, inStream)); /* HACK! */
     if (s->io->seek(s->io, (PHYSFS_uint64) pos))
         return SZ_OK;
     return SZE_FAIL;
@@ -169,7 +169,7 @@ static int lzma_file_cmp_stdlib(const void *key, const void *object)
 {
     const char *name = (const char *) key;
     LZMAfile *file = (LZMAfile *) object;
-    return strcmp(name, file->item->Name);
+    return __PHYSFS_utf8stricmp(name, file->item->Name);
 } /* lzma_file_cmp_posix */
 
 
@@ -180,7 +180,7 @@ static int lzma_file_cmp_stdlib(const void *key, const void *object)
 static int lzma_file_cmp(void *_a, size_t one, size_t two)
 {
     LZMAfile *files = (LZMAfile *) _a;
-    return strcmp(files[one].item->Name, files[two].item->Name);
+    return __PHYSFS_utf8stricmp(files[one].item->Name, files[two].item->Name);
 } /* lzma_file_cmp */
 
 
@@ -526,13 +526,13 @@ static void doEnumCallback(PHYSFS_EnumFilesCallback cb, void *callbackdata,
 
     memcpy(newstr, str, flen);
     newstr[flen] = '\0';
-    cb(callbackdata, odir, newstr);
+    cb(callbackdata, odir, newstr, NULL);
     __PHYSFS_smallFree(newstr);
 } /* doEnumCallback */
 
 
 static void LZMA_enumerateFiles(void *opaque, const char *dname,
-                                PHYSFS_EnumFilesCallback cb,
+                                PHYSFS_EnumFilesCallback cb, int withStats,
                                 const char *origdir, void *callbackdata)
 {
     size_t dlen = strlen(dname),
@@ -558,7 +558,7 @@ static void LZMA_enumerateFiles(void *opaque, const char *dname,
         const char * fname = file->item->Name;
         const char * dirNameEnd = fname + dlen_inc;
 
-        if (strncmp(dname, fname, dlen) != 0) /* Stop after mismatch, archive->files is sorted */
+        if (__PHYSFS_utf8strnicmp(dname, fname, dlen) != 0) /* Stop after mismatch, archive->files is sorted */
             break;
 
         if (strchr(dirNameEnd, '/')) /* Skip subdirs */
@@ -679,7 +679,7 @@ const PHYSFS_Archiver __PHYSFS_Archiver_LZMA =
         "7Z",
         "LZMA (7zip) format",
         "Dennis Schridde <devurandom@gmx.net>",
-        "http://icculus.org/physfs/",
+        "https://icculus.org/physfs/",
         0,  /* supportsSymlinks */
     },
     LZMA_openArchive,

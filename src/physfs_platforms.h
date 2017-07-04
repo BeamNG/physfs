@@ -21,7 +21,7 @@
 #  define PHYSFS_PLATFORM_POSIX 1
 #elif (defined _WIN32_WCE) || (defined _WIN64_WCE)
 #  error PocketPC support was dropped from PhysicsFS 2.1. Sorry.
-#elif ((defined WINAPI_FAMILY) && WINAPI_FAMILY == WINAPI_FAMILY_APP)
+#elif ((defined WINAPI_FAMILY) && WINAPI_FAMILY == WINAPI_FAMILY_APP && !defined(_XBOX_ONE))
 #   define PHYSFS_PLATFORM_WINRT 1
 #   define PHYSFS_NO_CDROM_SUPPORT 1
 #   define PHYSFS_PLATFORM_WINDOWS 1

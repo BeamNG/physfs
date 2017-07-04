@@ -13,6 +13,7 @@
 
 #define __PHYSICSFS_INTERNAL__
 #include "physfs_internal.h"
+#include <wctype.h>
 
 
 typedef struct __PHYSFS_DIRHANDLE__
@@ -614,7 +615,7 @@ void __PHYSFS_sort(void *entries, size_t max,
 {
     /*
      * Quicksort w/ Bubblesort fallback algorithm inspired by code from here:
-     *   http://www.cs.ubc.ca/spider/harrison/Java/sorting-demo.html
+     *   https://www.cs.ubc.ca/spider/harrison/Java/sorting-demo.html
      */
     if (max > 0)
         __PHYSFS_quick_sort(entries, 0, max - 1, cmpfn, swapfn);
@@ -701,6 +702,7 @@ PHYSFS_DECL const char *PHYSFS_getErrorByCode(PHYSFS_ErrorCode code)
         case PHYSFS_ERR_DIR_NOT_EMPTY: return "directory isn't empty";
         case PHYSFS_ERR_OS_ERROR: return "OS reported an error";
         case PHYSFS_ERR_DUPLICATE: return "duplicate resource";
+        case PHYSFS_ERR_BAD_PASSWORD: return "bad password";
     } /* switch */
 
     return NULL;  /* don't know this error code. */
@@ -904,7 +906,7 @@ static int sanitizePlatformIndependentPath(const char *src, char *dst)
         if (ch == '/')   /* path separator. */
         {
             *dst = '\0';  /* "." and ".." are illegal pathnames. */
-            if ((strcmp(prev, ".") == 0) || (strcmp(prev, "..") == 0))
+            if ((__PHYSFS_utf8stricmp(prev, ".") == 0) || (__PHYSFS_utf8stricmp(prev, "..") == 0))
                 BAIL_MACRO(PHYSFS_ERR_BAD_FILENAME, 0);
 
             while (*src == '/')   /* chop out doubles... */
@@ -1286,8 +1288,6 @@ static void freeArchivers(void)
 
 static int doDeinit(void)
 {
-    BAIL_IF_MACRO(!__PHYSFS_platformDeinit(), ERRPASS, 0);
-
     closeFileHandleList(&openWriteList);
     BAIL_IF_MACRO(!PHYSFS_setWriteDir(NULL), PHYSFS_ERR_FILES_STILL_OPEN, 0);
 
@@ -1335,6 +1335,10 @@ static int doDeinit(void)
         allocator.Deinit();
 
     errorLock = stateLock = NULL;
+
+    /* !!! FIXME: what on earth are you supposed to do if this fails? */
+    BAIL_IF_MACRO(!__PHYSFS_platformDeinit(), ERRPASS, 0);
+
     return 1;
 } /* doDeinit */
 
@@ -1359,6 +1363,26 @@ char *__PHYSFS_strdup(const char *str)
         strcpy(retval, str);
     return retval;
 } /* __PHYSFS_strdup */
+
+
+PHYSFS_uint32 __PHYSFS_hashString(const char *str, size_t len)
+{
+    wchar_t bufferW[1024];
+    wchar_t *dBufferW = len > 1024 ? allocator.Malloc(len * 2) : NULL;
+    PHYSFS_uint32 hash = 5381;
+    wchar_t *strW = dBufferW ? dBufferW : bufferW;
+    PHYSFS_utf8ToUtf16(str, strW, len * 2);
+    len = wcslen(strW);
+    while (len--) {
+        *strW = towupper(*strW);
+        hash = ((hash << 5) + hash) ^ (*(((char*)strW) + 0));
+        hash = ((hash << 5) + hash) ^ (*(((char*)strW) + 1));
+        ++strW;
+    }
+
+    allocator.Free(dBufferW);
+    return hash;
+} /* __PHYSFS_hashString */
 
 
 /* MAKE SURE you hold stateLock before calling this! */
@@ -1637,7 +1661,7 @@ static int doMount(PHYSFS_Io *io, const char *fname,
         for (i = searchPath; i != NULL; i = i->next)
         {
             /* already in search path? */
-            if ((i->dirName != NULL) && (strcmp(fname, i->dirName) == 0))
+            if ((i->dirName != NULL) && (__PHYSFS_utf8stricmp(fname, i->dirName) == 0))
                 BAIL_MACRO_MUTEX(ERRPASS, stateLock, 1);
             prev = i;
         } /* for */
@@ -1749,7 +1773,7 @@ int PHYSFS_unmount(const char *oldDir)
     __PHYSFS_platformGrabMutex(stateLock);
     for (i = searchPath; i != NULL; i = i->next)
     {
-        if (strcmp(i->dirName, oldDir) == 0)
+        if (__PHYSFS_utf8stricmp(i->dirName, oldDir) == 0)
         {
             next = i->next;
             BAIL_IF_MACRO_MUTEX(!freeDirHandle(i, openReadList), ERRPASS,
@@ -1781,7 +1805,7 @@ const char *PHYSFS_getMountPoint(const char *dir)
     __PHYSFS_platformGrabMutex(stateLock);
     for (i = searchPath; i != NULL; i = i->next)
     {
-        if (strcmp(i->dirName, dir) == 0)
+        if (__PHYSFS_utf8stricmp(i->dirName, dir) == 0)
         {
             const char *retval = ((i->mountPoint) ? i->mountPoint : "/");
             __PHYSFS_platformReleaseMutex(stateLock);
@@ -2144,7 +2168,7 @@ static int locateInStringList(const char *str,
     {
         half_len = len >> 1;
         middle = lo + half_len;
-        cmp = strcmp(list[middle], str);
+        cmp = __PHYSFS_utf8stricmp(list[middle], str);
 
         if (cmp == 0)  /* it's in the list already. */
             return 1;
@@ -2162,8 +2186,7 @@ static int locateInStringList(const char *str,
 } /* locateInStringList */
 
 
-static void enumFilesCallback(void *data, const char *origdir, const char *str)
-{
+static void enumFilesCallback(void *data, const char *origdir, const char *str, struct PHYSFS_Stat *stat) {
     PHYSFS_uint32 pos;
     void *ptr;
     char *newstr;
@@ -2231,7 +2254,7 @@ static void enumerateFromMountPoint(DirHandle *i, const char *arcfname,
     end = strchr(ptr, '/');
     assert(end);  /* should always find a terminating '/'. */
     *end = '\0';
-    callback(data, _fname, ptr);
+    callback(data, _fname, ptr, NULL);
     __PHYSFS_smallFree(mountPoint);
 } /* enumerateFromMountPoint */
 
@@ -2244,9 +2267,7 @@ typedef struct SymlinkFilterData
 } SymlinkFilterData;
 
 /* !!! FIXME: broken if in a virtual mountpoint (stat call fails). */
-static void enumCallbackFilterSymLinks(void *_data, const char *origdir,
-                                       const char *fname)
-{
+static void enumCallbackFilterSymLinks(void *_data, const char *origdir, const char *fname, struct PHYSFS_Stat *stat) {
     const char *trimmedDir = (*origdir == '/') ? (origdir+1) : origdir;
     const size_t slen = strlen(trimmedDir) + strlen(fname) + 2;
     char *path = (char *) __PHYSFS_smallAlloc(slen);
@@ -2262,7 +2283,7 @@ static void enumCallbackFilterSymLinks(void *_data, const char *origdir,
         {
             /* Pass it on to the application if it's not a symlink. */
             if (statbuf.filetype != PHYSFS_FILETYPE_SYMLINK)
-                data->callback(data->callbackData, origdir, fname);
+                data->callback(data->callbackData, origdir, fname, &statbuf);
         } /* if */
 
         __PHYSFS_smallFree(path);
@@ -2271,10 +2292,7 @@ static void enumCallbackFilterSymLinks(void *_data, const char *origdir,
 
 
 /* !!! FIXME: this should report error conditions. */
-void PHYSFS_enumerateFilesCallback(const char *_fname,
-                                   PHYSFS_EnumFilesCallback callback,
-                                   void *data)
-{
+void PHYSFS_enumerateFilesCallback(const char *_fname, PHYSFS_EnumFilesCallback callback, void *data) {
     size_t len;
     char *fname;
 
@@ -2302,22 +2320,19 @@ void PHYSFS_enumerateFilesCallback(const char *_fname,
         for (i = searchPath; i != NULL; i = i->next)
         {
             char *arcfname = fname;
-            if (partOfMountPoint(i, arcfname))
+            if (partOfMountPoint(i, arcfname)) {
                 enumerateFromMountPoint(i, arcfname, callback, _fname, data);
-
+            }
             else if (verifyPath(i, &arcfname, 0))
             {
                 if ((!allowSymLinks) && (i->funcs->info.supportsSymlinks))
                 {
                     filterdata.dirhandle = i;
-                    i->funcs->enumerateFiles(i->opaque, arcfname,
-                                             enumCallbackFilterSymLinks,
-                                             _fname, &filterdata);
+                    i->funcs->enumerateFiles(i->opaque, arcfname, enumCallbackFilterSymLinks,_fname, &filterdata);
                 } /* if */
                 else
                 {
-                    i->funcs->enumerateFiles(i->opaque, arcfname,
-                                             callback, _fname, data);
+                    i->funcs->enumerateFiles(i->opaque, arcfname, callback, _fname, data);
                 } /* else */
             } /* else if */
         } /* for */
@@ -2860,7 +2875,7 @@ int PHYSFS_stat(const char *_fname, PHYSFS_Stat *stat)
                 {
                     /* !!! FIXME: this test is wrong and should be elsewhere. */
                     stat->readonly = !(writeDir &&
-                                 (strcmp(writeDir->dirName, i->dirName) == 0));
+                                 (__PHYSFS_utf8stricmp(writeDir->dirName, i->dirName) == 0));
                     retval = i->funcs->stat(i->opaque, arcfname, stat);
                     if ((retval) || (currentErrorCode() != PHYSFS_ERR_NOT_FOUND))
                         exists = 1;

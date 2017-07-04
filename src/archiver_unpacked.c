@@ -237,7 +237,7 @@ static void doEnumCallback(PHYSFS_EnumFilesCallback cb, void *callbackdata,
 
     memcpy(newstr, str, ln);
     newstr[ln] = '\0';
-    cb(callbackdata, odir, newstr);
+    cb(callbackdata, odir, newstr, NULL);
     __PHYSFS_smallFree(newstr);
 } /* doEnumCallback */
 

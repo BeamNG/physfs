@@ -8,7 +8,7 @@
  * \mainpage PhysicsFS
  *
  * The latest version of PhysicsFS can be found at:
- *     http://icculus.org/physfs/
+ *     https://icculus.org/physfs/
  *
  * PhysicsFS; a portable, flexible file i/o abstraction.
  *
@@ -1515,6 +1515,8 @@ PHYSFS_DECL PHYSFS_sint16 PHYSFS_swapSLE16(PHYSFS_sint16 val);
  */
 PHYSFS_DECL PHYSFS_uint16 PHYSFS_swapULE16(PHYSFS_uint16 val);
 
+PHYSFS_DECL PHYSFS_uint8  PHYSFS_swapULE8(PHYSFS_uint8 x);
+
 /**
  * \fn PHYSFS_sint32 PHYSFS_swapSLE32(PHYSFS_sint32 val)
  * \brief Swap littleendian signed 32 to platform's native byte order.
@@ -1550,7 +1552,7 @@ PHYSFS_DECL PHYSFS_uint32 PHYSFS_swapULE32(PHYSFS_uint32 val);
  *    \param val value to convert
  *   \return converted value.
  *
- * \warning Remember, PHYSFS_uint64 is only 32 bits on platforms without
+ * \warning Remember, PHYSFS_sint64 is only 32 bits on platforms without
  *          any sort of 64-bit support.
  */
 PHYSFS_DECL PHYSFS_sint64 PHYSFS_swapSLE64(PHYSFS_sint64 val);
@@ -1633,7 +1635,7 @@ PHYSFS_DECL PHYSFS_uint32 PHYSFS_swapUBE32(PHYSFS_uint32 val);
  *    \param val value to convert
  *   \return converted value.
  *
- * \warning Remember, PHYSFS_uint64 is only 32 bits on platforms without
+ * \warning Remember, PHYSFS_sint64 is only 32 bits on platforms without
  *          any sort of 64-bit support.
  */
 PHYSFS_DECL PHYSFS_sint64 PHYSFS_swapSBE64(PHYSFS_sint64 val);
@@ -1997,7 +1999,7 @@ PHYSFS_DECL int PHYSFS_writeUBE32(PHYSFS_File *file, PHYSFS_uint32 val);
  *   \return zero on failure, non-zero on success. On failure, you can
  *           find out what went wrong from PHYSFS_getLastError().
  *
- * \warning Remember, PHYSFS_uint64 is only 32 bits on platforms without
+ * \warning Remember, PHYSFS_sint64 is only 32 bits on platforms without
  *          any sort of 64-bit support.
  */
 PHYSFS_DECL int PHYSFS_writeSLE64(PHYSFS_File *file, PHYSFS_sint64 val);
@@ -2033,7 +2035,7 @@ PHYSFS_DECL int PHYSFS_writeULE64(PHYSFS_File *file, PHYSFS_uint64 val);
  *   \return zero on failure, non-zero on success. On failure, you can
  *           find out what went wrong from PHYSFS_getLastError().
  *
- * \warning Remember, PHYSFS_uint64 is only 32 bits on platforms without
+ * \warning Remember, PHYSFS_sint64 is only 32 bits on platforms without
  *          any sort of 64-bit support.
  */
 PHYSFS_DECL int PHYSFS_writeSBE64(PHYSFS_File *file, PHYSFS_sint64 val);
@@ -2286,7 +2288,7 @@ typedef void (*PHYSFS_StringCallback)(void *data, const char *str);
  * \sa PHYSFS_enumerateFilesCallback
  */
 typedef void (*PHYSFS_EnumFilesCallback)(void *data, const char *origdir,
-                                         const char *fname);
+                                         const char *fname, struct PHYSFS_Stat *stat);
 
 
 /**
@@ -3153,7 +3155,8 @@ typedef enum PHYSFS_ErrorCode
     PHYSFS_ERR_BUSY,             /**< Tried to modify a file the OS needs.  */
     PHYSFS_ERR_DIR_NOT_EMPTY,    /**< Tried to delete dir with files in it. */
     PHYSFS_ERR_OS_ERROR,         /**< Unspecified OS-level error.           */
-    PHYSFS_ERR_DUPLICATE         /**< Duplicate entry.                      */
+    PHYSFS_ERR_DUPLICATE,        /**< Duplicate entry.                      */
+    PHYSFS_ERR_BAD_PASSWORD      /**< Bad password.                         */
 } PHYSFS_ErrorCode;
 
 

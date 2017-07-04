@@ -103,6 +103,18 @@ set(LZMA_SRCS
     src/lzma/C/Compress/Lzma/LzmaDecode.c
 )
 
+set(AES_SRCS
+    src/aes/aescrypt.c
+    src/aes/aeskey.c
+    src/aes/aestab.c
+    src/aes/entropy.c
+    src/aes/fileenc.c
+    src/aes/hmac.c
+    src/aes/prng.c
+    src/aes/pwd2key.c
+    src/aes/sha1.c
+)
+
 if(BEOS)
     # We add this explicitly, since we don't want CMake to think this
     #  is a C++ project unless we're on BeOS.
@@ -219,6 +231,8 @@ endif()
 option(PHYSFS_ARCHIVE_ZIP "Enable ZIP support" TRUE)
 if(PHYSFS_ARCHIVE_ZIP)
     add_definitions(-DPHYSFS_SUPPORTS_ZIP=1)
+    set(PHYSFS_SRCS ${PHYSFS_SRCS} ${AES_SRCS})
+    include_directories(./src/aes)
 endif()
 
 option(PHYSFS_ARCHIVE_7Z "Enable 7zip support" TRUE)

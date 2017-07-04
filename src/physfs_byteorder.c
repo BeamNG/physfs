@@ -51,6 +51,7 @@ static inline PHYSFS_uint64 PHYSFS_Swap64(PHYSFS_uint64 val) {
 
 /* Byteswap item from the specified endianness to the native endianness */
 #if PHYSFS_BYTEORDER == PHYSFS_LIL_ENDIAN
+PHYSFS_uint8  PHYSFS_swapULE8(PHYSFS_uint8 x)   { return x; }
 PHYSFS_uint16 PHYSFS_swapULE16(PHYSFS_uint16 x) { return x; }
 PHYSFS_sint16 PHYSFS_swapSLE16(PHYSFS_sint16 x) { return x; }
 PHYSFS_uint32 PHYSFS_swapULE32(PHYSFS_uint32 x) { return x; }

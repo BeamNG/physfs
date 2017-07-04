@@ -19,9 +19,13 @@
 
 #define WIN32_LEAN_AND_MEAN 1
 #include <windows.h>
+
+#ifndef _XBOX_ONE
 #include <userenv.h>
 #include <shlobj.h>
 #include <dbt.h>
+#endif // _XBOX_ONE
+
 #include <errno.h>
 #include <ctype.h>
 #include <time.h>
@@ -157,7 +161,8 @@ typedef BOOL (WINAPI *fnSTEM)(DWORD, LPDWORD b);
 
 static DWORD pollDiscDrives(void)
 {
-    /* Try to use SetThreadErrorMode(), which showed up in Windows 7. */
+#ifndef _XBOX_ONE
+	/* Try to use SetThreadErrorMode(), which showed up in Windows 7. */
     HANDLE lib = LoadLibraryA("kernel32.dll");
     fnSTEM stem = NULL;
     char drive[4] = { 'x', ':', '\\', '\0' };
@@ -195,13 +200,17 @@ static DWORD pollDiscDrives(void)
         FreeLibrary(lib);
 
     return drives;
+#else
+	return 1;
+#endif // _XBOX_ONE
 } /* pollDiscDrives */
 
 
 static LRESULT CALLBACK detectCDWndProc(HWND hwnd, UINT msg,
                                         WPARAM wp, LPARAM lparam)
 {
-    PDEV_BROADCAST_HDR lpdb = (PDEV_BROADCAST_HDR) lparam;
+#ifndef _XBOX_ONE
+	PDEV_BROADCAST_HDR lpdb = (PDEV_BROADCAST_HDR) lparam;
     PDEV_BROADCAST_VOLUME lpdbv = (PDEV_BROADCAST_VOLUME) lparam;
     const int removed = (wp == DBT_DEVICEREMOVECOMPLETE);
 
@@ -221,11 +230,15 @@ static LRESULT CALLBACK detectCDWndProc(HWND hwnd, UINT msg,
         drivesWithMediaBitmap |= lpdbv->dbcv_unitmask;
 
     return TRUE;
+#else
+	return FALSE;
+#endif // _XBOX_ONE
 } /* detectCDWndProc */
 
 
 static DWORD WINAPI detectCDThread(LPVOID lpParameter)
 {
+#ifndef _XBOX_ONE
     const char *classname = "PhysicsFSDetectCDCatcher";
     const char *winname = "PhysicsFSDetectCDMsgWindow";
     HINSTANCE hInstance = GetModuleHandleW(NULL);
@@ -286,11 +299,15 @@ static DWORD WINAPI detectCDThread(LPVOID lpParameter)
     UnregisterClassA(classname, hInstance);
 
     return 0;
+#else
+	return 1;
+#endif // _XBOX_ONE
 } /* detectCDThread */
 
 
 void __PHYSFS_platformDetectAvailableCDs(PHYSFS_StringCallback cb, void *data)
 {
+#ifndef _XBOX_ONE
     char drive_str[4] = { 'x', ':', '\\', '\0' };
     DWORD drives = 0;
     DWORD i;
@@ -322,6 +339,7 @@ void __PHYSFS_platformDetectAvailableCDs(PHYSFS_StringCallback cb, void *data)
             cb(data, drive_str);
         } /* if */
     } /* for */
+#endif // _XBOX_ONE
 } /* __PHYSFS_platformDetectAvailableCDs */
 
 
@@ -393,14 +411,19 @@ char *__PHYSFS_platformCalcPrefDir(const char *org, const char *app)
      *                          NULL, &wszPath);
      */
 
-    WCHAR path[MAX_PATH];
     char *utf8 = NULL;
     size_t len = 0;
     char *retval = NULL;
 
-    if (!SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_APPDATA | CSIDL_FLAG_CREATE,
+#ifndef _XBOX_ONE
+	WCHAR path[MAX_PATH];
+	if (!SUCCEEDED(SHGetFolderPathW(NULL,
+		CSIDL_APPDATA | CSIDL_FLAG_CREATE,
                                    NULL, 0, path)))
         BAIL_MACRO(PHYSFS_ERR_OS_ERROR, NULL);
+#else
+	WCHAR path[MAX_PATH] = L"";
+#endif // _XBOX_ONE
 
     utf8 = unicodeToUtf8Heap(path);
     BAIL_IF_MACRO(!utf8, ERRPASS, NULL);
@@ -420,7 +443,8 @@ char *__PHYSFS_platformCalcPrefDir(const char *org, const char *app)
 
 char *__PHYSFS_platformCalcUserDir(void)
 {
-    typedef BOOL (WINAPI *fnGetUserProfDirW)(HANDLE, LPWSTR, LPDWORD);
+#ifndef _XBOX_ONE
+	typedef BOOL (WINAPI *fnGetUserProfDirW)(HANDLE, LPWSTR, LPDWORD);
     fnGetUserProfDirW pGetDir = NULL;
     HANDLE lib = NULL;
     HANDLE accessToken = NULL;       /* Security handle to process */
@@ -472,6 +496,9 @@ char *__PHYSFS_platformCalcUserDir(void)
 done:
     FreeLibrary(lib);
     return retval;  /* We made it: hit the showers. */
+#else
+	return "";
+#endif // _XBOX_ONE
 } /* __PHYSFS_platformCalcUserDir */
 
 
@@ -479,14 +506,6 @@ void *__PHYSFS_platformGetThreadID(void)
 {
     return ( (void *) ((size_t) GetCurrentThreadId()) );
 } /* __PHYSFS_platformGetThreadID */
-
-
-static int isSymlinkAttrs(const DWORD attr, const DWORD tag)
-{
-    return ( (attr & FILE_ATTRIBUTE_REPARSE_POINT) && 
-             (tag == PHYSFS_IO_REPARSE_TAG_SYMLINK) );
-} /* isSymlinkAttrs */
-
 
 void __PHYSFS_platformEnumerateFiles(const char *dirname,
                                      PHYSFS_EnumFilesCallback callback,
@@ -528,26 +547,31 @@ void __PHYSFS_platformEnumerateFiles(const char *dirname,
     if (dir == INVALID_HANDLE_VALUE)
         return;
 
+    int dirnameLen = strlen(dirname);
+    char *filePath = (char *)__PHYSFS_smallAlloc(dirnameLen + MAX_PATH + 2);
+    filePath[0] = 0;
+    strcat(filePath, dirname);
+    strcat(filePath, "\\");
     do
     {
-        const DWORD attr = entw.dwFileAttributes;
-        const DWORD tag = entw.dwReserved0;
         const WCHAR *fn = entw.cFileName;
-        char *utf8;
 
-        if ((fn[0] == '.') && (fn[1] == '\0'))
-            continue;
-        if ((fn[0] == '.') && (fn[1] == '.') && (fn[2] == '\0'))
-            continue;
+        if ((fn[0] == '.') && (fn[1] == '\0')) continue;
+        if ((fn[0] == '.') && (fn[1] == '.') && (fn[2] == '\0')) continue;
 
-        utf8 = unicodeToUtf8Heap(fn);
-        if (utf8 != NULL)
-        {
-            callback(callbackdata, origdir, utf8);
-            allocator.Free(utf8);
-        } /* if */
+        char *utf8 = unicodeToUtf8Heap(fn);
+        if (utf8 == NULL) continue;
+
+        filePath[dirnameLen+1] = 0;
+        strcat(filePath, utf8);
+        PHYSFS_Stat stat = { -1, 0 };
+        if ((entw.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0) stat.filetype = PHYSFS_FILETYPE_REGULAR;
+        else stat.filetype = PHYSFS_FILETYPE_DIRECTORY;
+        callback(callbackdata, origdir, utf8, &stat);
+        allocator.Free(utf8);
     } while (FindNextFileW(dir, &entw) != 0);
 
+    __PHYSFS_smallFree(filePath);
     FindClose(dir);
 } /* __PHYSFS_platformEnumerateFiles */
 
@@ -574,8 +598,10 @@ int __PHYSFS_platformDeinit(void)
 {
     if (detectCDThreadHandle)
     {
-        if (detectCDHwnd)
+#ifndef _XBOX_ONE
+		if (detectCDHwnd)
             PostMessageW(detectCDHwnd, WM_QUIT, 0, 0);
+#endif // #ifndef _XBOX_ONE
         CloseHandle(detectCDThreadHandle);
         detectCDThreadHandle = NULL;
         initialDiscDetectionComplete = 0;
@@ -752,24 +778,16 @@ PHYSFS_sint64 __PHYSFS_platformTell(void *opaque)
 PHYSFS_sint64 __PHYSFS_platformFileLength(void *opaque)
 {
     HANDLE Handle = ((WinApiFile *) opaque)->handle;
-    DWORD SizeHigh;
-    DWORD SizeLow;
-    PHYSFS_sint64 retval;
+	LARGE_INTEGER Size;
 
-    SizeLow = GetFileSize(Handle, &SizeHigh);
-    if ( (SizeLow == PHYSFS_INVALID_SET_FILE_POINTER) &&
+    if (!GetFileSizeEx(Handle, &Size) &&
          (GetLastError() != NO_ERROR) )
     {
         BAIL_MACRO(errcodeFromWinApi(), -1);
-    } /* if */
-    else
-    {
-        /* Combine the high/low order to create the 64-bit position value */
-        retval = (((PHYSFS_uint64) SizeHigh) << 32) | SizeLow;
-        assert(retval >= 0);
-    } /* else */
+    }
 
-    return retval;
+    assert(Size.QuadPart >= 0);
+    return Size.QuadPart;
 } /* __PHYSFS_platformFileLength */
 
 
@@ -844,6 +862,7 @@ void __PHYSFS_platformReleaseMutex(void *mutex)
 
 static PHYSFS_sint64 FileTimeToPhysfsTime(const FILETIME *ft)
 {
+#ifndef _XBOX_ONE
     SYSTEMTIME st_utc;
     SYSTEMTIME st_localtz;
     TIME_ZONE_INFORMATION tzi;
@@ -873,6 +892,9 @@ static PHYSFS_sint64 FileTimeToPhysfsTime(const FILETIME *ft)
     retval = (PHYSFS_sint64) mktime(&tm);
     BAIL_IF_MACRO(retval == -1, PHYSFS_ERR_OS_ERROR, -1);
     return retval;
+#else
+	return 1;
+#endif // _XBOX_ONE
 } /* FileTimeToPhysfsTime */
 
 
